@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Stomp } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { ChatMessage } from '../models/ChatMessage';
+import { BehaviorSubject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -9,6 +10,10 @@ import { ChatMessage } from '../models/ChatMessage';
 export class ChatService {
 
   private stompClient: any;
+
+  private messageSubject: BehaviorSubject<ChatMessage[]> = new BehaviorSubject<ChatMessage[]>([]);
+
+  
 
   constructor() { 
     this.initConnectionSocket();
@@ -20,17 +25,23 @@ export class ChatService {
     this.stompClient = Stomp.over(socket);
   }
 
-  joinRoom(roomId: string){
-    this.stompClient.connect({},()=>{
-      this.stompClient.suscribe(`/topic/${roomId}`, function(messages: any){
-        console.log(messages);
-      });
+  joinRoom(roomId: string) {
+    this.stompClient.connect({}, ()=>{
+      this.stompClient.subscribe(`/topic/${roomId}`, (messages: any) => {
+        const messageContent = JSON.parse(messages.body);
+        const currentMessage = this.messageSubject.getValue();
+        currentMessage.push(messageContent);
+        this.messageSubject.next(currentMessage);
+
+      })
     })
   }
 
   sendMessage(roomId: string, chatMessage: ChatMessage){
-    console.log(JSON.stringify(chatMessage));
-    const resp = this.stompClient.send(`/app/chat/${roomId}`, JSON.stringify(chatMessage));
-    console.log(resp);
+    this.stompClient.send(`/app/chat/${roomId}`,{}, JSON.stringify(chatMessage));
+  }
+
+  getMessageSubject(){
+    return this.messageSubject.asObservable();
   }
 }
